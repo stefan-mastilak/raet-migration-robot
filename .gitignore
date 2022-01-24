@@ -1,0 +1,9 @@
+.idea
+.pyc
+**.pickle
+**.json
+**.log
+**.xlsx
+/lp_pwd.txt
+**.pub
+__pycache__/
