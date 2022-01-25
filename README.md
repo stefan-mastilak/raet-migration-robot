@@ -2,7 +2,7 @@
 ### General: 
 * Robot type: On-Prem solution
 * Customer: Visma Raet Netherlands
-* Trigerring: schedule based 
+* Trigerring: schedule based - every working day
 * Author: stefan.mastilak@visma.com
 ### Visma Raet migration robot tasks:
 * PDOL migration
