@@ -1,8 +1,9 @@
 ## visma-raet-migration
+Data migration robot for Visma Raet. Robot is transforming data exported from old vendor (Pentaho Data Integration ETL) and uploading them to the Visma Raet SFTP server. 
 ### General: 
 * Robot type: On-Prem solution
 * Customer: Visma Raet Netherlands
-* Trigerring: schedule based 
+* Trigerring: schedule based - every working day
 * Author: stefan.mastilak@visma.com
 <br></br>
 ### Visma Raet migration robot tasks:
