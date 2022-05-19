@@ -28,8 +28,8 @@ Data migration robot for Visma Raet. Robot is transforming data exported from ol
 * requirements.txt --> Python requirements file
 <br></br>
 ### Robot runtime environment:
-* NL-D-RAET00000 (Windows server)
-  * logon via VPN
+* NL-D-RAET00000 (Windows server) 
+  * logon via VPN - credentials stored in LastPass
 * Installed components:
   * Python 
     * version: 3.8.10 
