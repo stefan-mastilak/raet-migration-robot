@@ -27,9 +27,8 @@ Data migration robot for Visma Raet. Robot is transforming data exported from ol
 * requirements.txt --> Python requirements file
 <br></br>
 ### Robot runtime environment:
-* NL-D-RAET00000 (10.5.94.29) - raet.local domain
-* Windows server 
-  * logon via https://remote.raet.nl
+* NL-D-RAET00000 (Windows server)
+  * logon via VPN
 * Installed components:
   * Python 
     * version: 3.8.10 
