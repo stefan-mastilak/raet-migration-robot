@@ -5,6 +5,7 @@ Data migration robot for Visma Raet. Robot is transforming data exported from ol
 * Customer: Visma Raet Netherlands
 * Trigerring: schedule based - every working day
 * Author: Stefan Mastilak (stefan.mastilak@gmail.com)
+* Project credentials: https://www.lastpass.com/
 <br></br>
 ### Visma Raet migration robot tasks:
 * PDOL migration (Payroll files)
