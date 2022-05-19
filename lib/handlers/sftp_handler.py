@@ -2,13 +2,14 @@
 
 import config as cfg
 import logging
-from common.lib.handlers.lastpass_handler import get_lp_creds
+from lib.handlers.lastpass_handler import get_lp_creds
 import pysftp
 
 
 class SftpHandle(object):
     """
-    SFTP handler class. Credentials for SFTP are obtained from LastPass secure password manager.
+    SFTP handler class.
+    Credentials for SFTP are obtained from LastPass secure password manager.
     """
 
     def __init__(self):

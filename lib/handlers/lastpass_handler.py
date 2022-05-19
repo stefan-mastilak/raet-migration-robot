@@ -4,8 +4,29 @@ import logging
 import lastpass
 import config as cfg
 from os import path
+from retry import retry
 
 
+def _get_master_pw():
+    """
+    Get LastPass master password that is stored locally on the server under the robot project
+    directory (stored in file lp_pwd.txt).
+    File storing the lastpass master pwd is added to .gitignore and will not be visible anywhere except
+    robot execution server.
+    :return: lastpass master pwd
+    """
+    pw_path = path.join(cfg.ROOT_DIR, cfg.LP_MASTER_PWD_FILE)
+
+    if path.isfile(pw_path):
+        with open(pw_path) as f:
+            pwd = f.read()
+            return pwd
+    else:
+        logging.critical(msg=f' Unable to fetch LP master password from {pw_path}')
+        raise FileNotFoundError(f' Unable to fetch LP master password from {pw_path}')
+
+
+@retry(Exception, delay=10, tries=5)
 def get_lp_creds(folder, item, user):
     """
     Get credentials from the LastPass secure password manager.
@@ -19,7 +40,7 @@ def get_lp_creds(folder, item, user):
         logging.info(msg=f' Calling LastPass. Folder: {folder}, Item: {item}')
         creds = None
         vault = lastpass.Vault.open_remote(username=user,
-                                           password=get_master_pw())
+                                           password=_get_master_pw())
 
         for i in vault.accounts:
             if i.group.decode('utf-8') == folder and i.name.decode('utf-8') == item:
@@ -35,20 +56,3 @@ def get_lp_creds(folder, item, user):
     else:
         logging.info(msg=f' Credentials for {item} obtained successfully')
         return creds
-
-
-def get_master_pw():
-    """
-    Get LastPass master password that is stored locally on the server:
-    - under the robot project directory - stored in file lp_pwd.txt
-    - file storing the lastpass master pwd is added to .gitignore and will not be visible anywhere except
-      robot execution server.
-    :return: lastpass master pwd
-    """
-    pw_path = f'{cfg.ROOT_DIR}\\{cfg.LP_MASTER_PWD}'
-    if path.isfile(pw_path):
-        with open(pw_path) as f:
-            pwd = f.read()
-            return pwd
-    else:
-        raise FileNotFoundError(f' Unable to fetch password from {cfg.ROOT_DIR}\\{cfg.LP_MASTER_PWD}')
