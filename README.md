@@ -4,7 +4,7 @@ Data migration robot for Visma Raet. Robot is transforming data exported from ol
 * Robot type: On-Prem solution
 * Customer: Visma Raet Netherlands
 * Trigerring: schedule based - every working day
-* Author: stefan.mastilak@visma.com
+* Author: Stefan Mastilak (stefan.mastilak@gmail.com)
 <br></br>
 ### Visma Raet migration robot tasks:
 * PDOL migration (Payroll files)
