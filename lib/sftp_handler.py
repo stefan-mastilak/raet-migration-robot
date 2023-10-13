@@ -2,7 +2,7 @@
 
 import config as cfg
 import logging
-from lib.handlers.lastpass_handler import get_lp_creds
+from lib.lastpass_handler import get_lp_creds
 import pysftp
 
 

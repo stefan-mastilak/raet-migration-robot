@@ -1,7 +1,7 @@
 # REF: stefan.mastilak@visma.com
 
 from lib.base_migration import Migration
-from lib.handlers.sftp_handler import SftpHandle
+from lib.sftp_handler import SftpHandle
 import config as cfg
 import glob
 import logging

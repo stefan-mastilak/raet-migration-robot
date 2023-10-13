@@ -1,10 +1,10 @@
 # REF: stefan.mastilak@visma.com
 
-from sdol.sdol_counters import SdolCounters
+from mig.sdol_counters import SdolCounters
 from lib.base_migration import Migration
-from lib.checks.base_checks import Checks
-from lib.actions.base_actions import Actions
-from lib.zipper.zip_handler import Zipper
+from lib.base_checks import Checks
+from lib.base_actions import Actions
+from lib.zip_handler import Zipper
 import config as cfg
 import glob
 import logging

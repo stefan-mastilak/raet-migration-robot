@@ -5,9 +5,9 @@ import logging
 import os
 from mlm.mlm_migration import MlmMigration
 from lib.base_migration import get_unprocessed_dirs
-from lib.handlers.slack_handler import SlackLogger
-from lib.handlers.lastpass_handler import get_lp_creds
-from lib.handlers.kpi_handler import Kpi
+from lib.slack_handler import SlackLogger
+from lib.lastpass_handler import get_lp_creds
+from lib.kpi_handler import Kpi
 from datetime import datetime
 
 

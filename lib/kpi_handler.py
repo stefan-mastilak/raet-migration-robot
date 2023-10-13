@@ -4,7 +4,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 from datetime import datetime
 import config as cfg
-from lib.handlers.lastpass_handler import get_lp_creds
+from lib.lastpass_handler import get_lp_creds
 from os import path
 import logging
 

@@ -1,9 +1,9 @@
 # REF: stefan.mastilak@visma.com
 
 from lib.base_migration import Migration
-from lib.checks.base_checks import Checks
-from lib.actions.base_actions import Actions
-from lib.zipper.zip_handler import Zipper
+from lib.base_checks import Checks
+from lib.base_actions import Actions
+from lib.zip_handler import Zipper
 from pathlib import Path
 import config as cfg
 import glob
