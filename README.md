@@ -12,21 +12,6 @@ Data migration robot for Visma Raet. Robot is transforming data exported from ol
 * SDOL migration (Personnel files)
 * MLM migration (Medical leave files)
 <br></br>
-### Repository content:
-* lib\actions --> base actions for all migration types
-* lib\checks --> base checks for all migration types
-* lib\handlers --> handlers for KPI, LastPass, Slack and SFTP
-* lib\zipper --> 7zip handler for all migration types
-* pdol --> PDOL migration
-* sdol --> SDOL migration 
-* mlm  --> MLM migration
-* config.py --> robot configuration file
-* main_pdol.py --> main PDOL migration script
-* main_sdol.py --> main SDOL migration script
-* main_mlm.py --> main MLM migration script
-* MigrationToolRobot.bat --> MigrationTool modified script used by robot
-* requirements.txt --> Python requirements file
-<br></br>
 ### Robot runtime environment:
 * NL-D-RAET00000 (Windows server) 
   * logon via VPN - credentials stored in LastPass
