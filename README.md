@@ -1,11 +1,11 @@
 ## raet-robot
 Data migration robot for Visma Raet. Robot is transforming data exported from old vendor (Pentaho Data Integration ETL) and uploading them to the Visma Raet SFTP server. 
 ### General: 
-* Robot type: On-Prem solution
+* Runtime: On-Prem
 * Customer: Visma Raet Netherlands
 * Trigerring: schedule based - every working day
-* Author: Stefan Mastilak (stefan.mastilak@gmail.com)
-* Project credentials: https://www.lastpass.com/
+* Author: Stefan Mastilak
+* Project credentials: www.lastpass.com
 <br></br>
 ### Visma Raet migration robot tasks:
 * PDOL migration (Payroll files)
