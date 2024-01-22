@@ -54,3 +54,5 @@ texttable==1.6.4
 typing-extensions==4.0.0
 urllib3==1.26.7
 yarl==1.7.2
+pandas~=2.0.3
+openpyxl~=3.1.2

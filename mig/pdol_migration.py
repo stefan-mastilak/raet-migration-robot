@@ -1,6 +1,5 @@
 # REF: stefan.mastilak@visma.com
 
-from mig.pdol_counters import PdolCounters
 from lib.base_migration import Migration
 from lib.base_checks import Checks
 from lib.base_actions import Actions
@@ -9,10 +8,9 @@ import config as cfg
 import logging
 import os
 import shutil
-import time
 
 
-class PdolMigration(Checks, Actions, Zipper, PdolCounters, Migration):
+class PdolMigration(Checks, Actions, Zipper, Migration):
     """
     PDOL migration class.
     """
@@ -65,106 +63,45 @@ class PdolMigration(Checks, Actions, Zipper, PdolCounters, Migration):
             logging.critical(msg=f" DOCS folder doesn't exists in {self.docs_dir} path")
             raise NotADirectoryError(f" DOCS folder doesn't exist in {self.docs_dir} path")
 
-    def __get_cmd_rows_count(self, cmd_files):
+    def __checksum_cmd_vs_docs(self, cmd_file):
         """
-        Read cmd file and get its rows count.
-        NOTE: There is always only one cmd file for PDOL migration.
-        :return: cmd file rows count
-        :rtype: int
-        """
-        if len(cmd_files) == 1:
-            cmd_file = cmd_files[0]
-
-            if os.path.isfile(cmd_file):
-                # get rows count:
-                with open(cmd_file) as cmd_file:
-                    rows = cmd_file.readlines()
-                if len(rows) > 0:
-                    return len(rows)
-                else:
-                    logging.critical(msg=f' Zero rows count in cmd file')
-                    raise ValueError(f' Zero rows count in cmd file')
-            else:
-                logging.critical(msg=f' Cmd file not found in {cmd_file} path')
-                raise FileNotFoundError(f' Cmd file not found in {cmd_file} path')
-        elif len(cmd_files) > 1:
-            logging.critical(msg=f' More than one cmd file found in {self.customer_dir} folder')
-            raise AssertionError(f' More than one cmd file found in {self.customer_dir} folder')
-        else:
-            logging.critical(msg=f' No cmd files found in {self.customer_dir} folder')
-            raise AssertionError(f' No cmd files found in {self.customer_dir} folder')
-
-    def __checksum_cmd_vs_docs(self, cmd_files):
-        """
-        Check if number or rows in cmd file divided by two is te same as number of file in DOCS folder.
-        :param: cmd_files: list of found cmd files
+        Check if count of cmd move rows is te same as count of files inside DOCS folder.
+        :param: cmd_file: cmd file
         :return: True if count matches
         :rtype: bool
         """
         docs_count = self.__get_docs_files_count()
-        cmd_count = self.__get_cmd_rows_count(cmd_files)
+        cmd_count = self.get_cmd_move_rows_count(cmd_file=cmd_file)
 
-        if docs_count == (cmd_count / 2):
-            logging.info(msg=f' Checksum passed: DOCS files count: {docs_count}, Cmd rows count: {cmd_count / 2}')
+        if docs_count == cmd_count:
+            logging.info(msg=f' Checksum passed: DOCS files count: {docs_count}, Cmd move rows count: {cmd_count}')
             return True
         else:
-            logging.critical(msg=f' Checksum failed: DOCS files count: {docs_count}, Cmd rows count: {cmd_count / 2}')
+            logging.critical(msg=f' Checksum failed: DOCS files count: {docs_count}, Cmd move rows count: {cmd_count}')
             return False
 
-    def __checksum_cmd_vs_dossiers(self, cmd_files):
+    def __checksum_cmd_vs_dossiers(self, cmd_file):
         """
-        Post-Checksum: Check if number of e-dossier files is the same as cmd file rows divided by two.
-        NOTE: We added one extra line to the cmd file to specify te encoding, so we need to subtract 1 from cmd_count.
+        Post-Checksum: Check if number of e-dossier files is the same as cmd file move rows count.
+        NOTE:
+        1) One file with SQL query created in e-dossier folder
+        2) One file BulkInsert created in e-dossier folder
+        So we need to subtract -2 from total e-dossier files count to have a correct number for comparison
+        :param cmd_file: cmd file path
         :return: checksum result
+        :rtype: bool
         """
-        eds_count = self.get_dossiers_count()
-        cmd_count = self.__get_cmd_rows_count(cmd_files=cmd_files)
+        dossiers_count = self.get_dossiers_count(cmd_file=cmd_file)
+        cmd_count = self.get_cmd_move_rows_count(cmd_file=cmd_file)
 
-        if eds_count == ((cmd_count - 1) / 2):
-            logging.info(msg=f' Checksum passed: Dossiers count: {eds_count}, Cmd rows count: {(cmd_count - 1) / 2}')
+        if (dossiers_count - 2) == cmd_count:
+            logging.info(msg=f' Checksum passed: Dossiers count: {dossiers_count}, Cmd move rows count: {cmd_count}')
+            logging.info(msg=f" NOTE: Considering 2 new extra files created in e-dossier folder (SQL and BulkInsert)")
             return True
         else:
-            logging.critical(msg=f' Checksum failed: Dossiers count: {eds_count}, Cmd rows count: {(cmd_count - 1) / 2}')
-            logging.critical(msg=f' Checksum error: {((cmd_count - 1) / 2) - eds_count} dossiers are missing')
+            logging.critical(msg=f' Checksum failed: Dossiers count: {dossiers_count}, Cmd move rows count: {cmd_count}')
+            logging.info(msg=f" NOTE: Considering 2 new extra files created in e-dossier folder (SQL and BulkInsert)")
             return False
-
-    def __rename_dossier_dirs(self):
-        """
-        Rename e-dossier migration folders according to '{CustomerID}_{CompanyID}_P' pattern.
-        :return: renamed folders paths
-        :rtype: list
-        """
-        mig_folders = self.get_mig_folders()
-        renamed = []
-
-        for dir_name in mig_folders:
-            mig_folder = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, dir_name)
-            new_name = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, f'{self.customer_dir}_{dir_name}_P')
-
-            if os.path.isdir(mig_folder):
-                retry = 5
-                while retry:
-                    time.sleep(0.5)
-                    try:
-                        os.rename(src=mig_folder, dst=new_name)
-                        renamed.append(new_name)
-                        retry = 0
-                    except Exception as err:
-                        if retry:
-                            retry = retry - 1
-                        else:
-                            logging.critical(
-                                msg=f' Renaming process failed for {mig_folder} >> {new_name}. Error: {err}')
-                            raise PermissionError(f' Renaming of {mig_folder} to {new_name} failed')
-            else:
-                logging.critical(msg=f" Directory {mig_folder} doesn't exist")
-                raise NotADirectoryError(f" Directory {mig_folder} doesn't exist")
-
-        if len(mig_folders) == len(renamed):
-            return renamed
-        else:
-            logging.critical(msg=f' Renaming process failed')
-            raise AssertionError(f' Renaming process failed')
 
     def run_migration(self, sftp_prod: bool):
         """
@@ -197,7 +134,7 @@ class PdolMigration(Checks, Actions, Zipper, PdolCounters, Migration):
 
             # check if properties file exists in customer folder:
             if not self.props_check():
-                break
+                pass
 
             # check if parameters file exists in customer folder:
             if not self.params_check():
@@ -205,6 +142,10 @@ class PdolMigration(Checks, Actions, Zipper, PdolCounters, Migration):
 
             # check if PDOL folder exists in customer folder:
             if not self.mig_type_dir_check():
+                break
+
+            # check if PDOL_parameters.xlsx file exists in customer folder:
+            if not self.mig_params_xlsx_check():
                 break
 
             # read password for zipped files:
@@ -228,33 +169,33 @@ class PdolMigration(Checks, Actions, Zipper, PdolCounters, Migration):
             if not self.execute_migration_job():
                 break
 
-            # get .cmd files (there should be always only one for PDOL):
-            cmd_files = self.get_cmd_files()
+            # get cmd file (there should always be only one for PDOL):
+            cmd_file = self.get_cmd_file()
 
-            # checksum cmd vs docs:
-            if not self.__checksum_cmd_vs_docs(cmd_files=cmd_files):
+            # checksum cmd move rows count vs docs files count:
+            if not self.__checksum_cmd_vs_docs(cmd_file=cmd_file):
                 break
 
-            # Execute cmd files (there should be always only one for PDOL):
-            if not self.execute_cmd_files(cmd_files=cmd_files):
+            # execute cmd file:
+            if not self.execute_cmd_file(cmd_file=cmd_file):
                 break
 
-            # checksum cmd vs dossiers:
-            if not self.__checksum_cmd_vs_dossiers(cmd_files=cmd_files):
+            # checksum cmd move rows count vs e-dossier files count:
+            if not self.__checksum_cmd_vs_dossiers(cmd_file=cmd_file):
                 break
 
-            # rename dossier directories:
-            renamed = self.__rename_dossier_dirs()
-            if not renamed:
+            # rename e-dossier folder:
+            renamed_dir = self.rename_dossier_folder(cmd_file=cmd_file)
+            if not renamed_dir:
                 break
 
-            # zip dossiers:
-            zipped = self.zip_dossiers(folders=renamed, pwd=self.password)
-            if not zipped:
+            # zip folder containing all e-dossiers:
+            zipped_folder = self.zip_single_dossier(folder=renamed_dir, pwd=self.password)
+            if not zipped_folder:
                 break
 
-            # Upload to SFTP:
-            if not self.upload_dossiers(files=zipped, sftp_prod=sftp_prod):
+            # Upload zipped folder to SFTP:
+            if not self.upload_single_dossier(file=zipped_folder, sftp_prod=sftp_prod):
                 break
 
             # PDOL migration succeeded:

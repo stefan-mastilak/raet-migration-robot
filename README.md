@@ -1,20 +1,40 @@
-## raet-robot
-Data migration robot for Visma Raet. Robot is transforming data exported from old vendor (Pentaho Data Integration ETL) and uploading them to the Visma Raet SFTP server. 
+## visma-raet-migration
 ### General: 
-* Runtime: On-Prem
+* Robot type: On-Prem solution
 * Customer: Visma Raet Netherlands
-* Trigerring: schedule based - every working day
-* Author: Stefan Mastilak
-* Project credentials: www.lastpass.com
+* Trigerring: schedule based 
+* Author: stefan.mastilak@visma.com
 <br></br>
 ### Visma Raet migration robot tasks:
 * PDOL migration (Payroll files)
 * SDOL migration (Personnel files)
 * MLM migration (Medical leave files)
 <br></br>
+### Repository content:
+* lib\base_actions - actions applicable for all migration types
+* lib\base_checks - checks applicable for all migration types
+* lib\base_migration - common for all migration types
+* lib\credentials_handler - credentials fetcher
+* lib\kpi_handler - KPI handling for all migration types
+* lib\sftp_handler - SFTP communication handling for all migration types
+* lib\slack_handler - Slack reporting for all migration types
+* lib\zip_handler - zip handling for all migration types
+
+* mig\mlm_migration - mlm migration runner
+* mig\pdol_migration - pdol migration runner
+* mig\sdol_migration - sdol migration runner
+
+* config.py --> robot configuration file
+* main_pdol.py --> main PDOL migration script
+* main_sdol.py --> main SDOL migration script
+* main_mlm.py --> main MLM migration script
+* MigrationToolRobot_DO_NOT_DELETE.bat --> MigrationTool robot script
+* requirements.txt --> Python requirements file
+<br></br>
 ### Robot runtime environment:
-* NL-D-RAET00000 (Windows server) 
-  * logon via VPN - credentials stored in LastPass
+* NL-D-RAET00000 (10.5.96.94) - raet.local domain
+* Windows server 
+  * logon via https://remote.raet.nl
 * Installed components:
   * Python 
     * version: 3.8.10 
@@ -38,6 +58,8 @@ Data migration robot for Visma Raet. Robot is transforming data exported from ol
  * Migration tool script:
     * D:\MigVisma\MigrationToolRobot.bat 
 <br></br>
+### Service proposal: 
+* https://confluence.visma.com/pages/viewpage.action?spaceKey=SI&title=Visma+RAET+service+proposal
 ### Reporting:
 * AutoMate KPI framework:
   *  GCP Project: prod-amkpi-cm

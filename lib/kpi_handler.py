@@ -1,36 +1,19 @@
 # REF: stefan.mastilak@visma.com
 
+import config as cfg
 from google.cloud import bigquery
 from google.oauth2 import service_account
 from datetime import datetime
-import config as cfg
-from lib.lastpass_handler import get_lp_creds
-from os import path
+from lib.credentials_handler import get_credentials
 import logging
 
 
 def _get_secret():
     """
-    Get GCP service account secret key from LastPass and save it locally to file.
-    Use previously stored credentials if LastPass is unreachable
+    Get GCP service account secret key credentials.json file
     :return: path to JSON file that is storing a GCP service account secret locally
     """
-    sc_path = path.join(cfg.ROOT_DIR, cfg.GCP_SECRET_FILE)
-
-    # get gcp service account secret key from LastPass and save it locally to file:
-    try:
-        creds = get_lp_creds(folder=cfg.LP_FOLDER, item=cfg.LP_GCP_SECRET, user=cfg.LP_USER_ACC)
-        with open(sc_path, 'w') as f:
-            f.write(creds.get('notes'))
-        return sc_path
-
-    # use previously stored credentials if LastPass is unreachable:
-    except Exception as error:
-        print(f' Lastpass Error: {error}')
-        if path.exists(sc_path):
-            return sc_path
-        else:
-            raise FileNotFoundError(f' GCP credentials file not found in {sc_path}')
+    return get_credentials(item=cfg.GCP_SECRET).get('notes')
 
 
 class Kpi(object):
@@ -46,10 +29,11 @@ class Kpi(object):
     TABLE_PROD = cfg.TABLE_PROD
     SCOPE = cfg.SCOPE
     CUSTOMER = cfg.ID_CUSTOMER
+    HOST = cfg.RUNTIME_HOSTNAME
+    MONITORING_TABLE = cfg.TABLE_MONITORING
 
     def __init__(self):
-        self.credentials = service_account.Credentials.from_service_account_file(filename=_get_secret(),
-                                                                                 scopes=[Kpi.SCOPE])
+        self.credentials = service_account.Credentials.from_service_account_info(_get_secret(), scopes=[Kpi.SCOPE])
         self.client = bigquery.Client(credentials=self.credentials,
                                       project=self.credentials.project_id)
 
@@ -106,4 +90,64 @@ class Kpi(object):
             logging.critical(msg=f' KPI framework error: BiqQuery Exception: {result.errors}')
             raise Exception(f' KPI framework error: BiqQuery Exception: {result.errors}')
         logging.info(msg=f' New entry added to KPI {table.split(".")[-1] if "." in table else table} table')
+        return result
+
+    def __get_last_health(self):
+        """
+        Helper for getting last health and status from monitoring table.
+        :return: Health
+        """
+        last_health = 0
+        query = (
+            f'''
+            SELECT STATUS, HEALTH
+            FROM `{Kpi.MONITORING_TABLE}`
+            WHERE ID_PROCESS = "{Kpi.PROCESS}" 
+            ORDER BY JOB_FINISHED DESC LIMIT 9
+            '''
+        )
+        bq_result = self.client.query(query)
+        for row in bq_result.result():
+            if row.get("STATUS") in ('green', "GREEN"):
+                last_health += 1
+        return last_health
+
+    def insert_to_monitoring(self, start, status):
+        """
+        Insert into the monitoring table
+        :param start: transaction start date
+        :param status: transaction status
+        """
+        query = (
+            f'''
+                INSERT INTO `{Kpi.MONITORING_TABLE}`
+                (
+                    ID_PROCESS,
+                    HOST,
+                    STATUS,
+                    JOB_DURATION,
+                    JOB_START,
+                    JOB_FINISHED,
+                    HEALTH
+                )
+                VALUES
+                (
+                   "{Kpi.PROCESS}",
+                   "{Kpi.HOST}",
+                   "{status}",
+                    {(datetime.now() - start).seconds},
+                    "{start}",
+                    "{datetime.now()}",
+                    {self.__get_last_health() +1 if status.lower() == 'green' else self.__get_last_health() +0}
+                )
+                ''')
+
+        result = self.client.query(query)
+        result.result()
+        if result.errors:
+            logging.critical(msg=f' Monitoring error: BiqQuery Exception: {result.errors}')
+            raise Exception(f' Monitoring error: BiqQuery Exception: {result.errors}')
+        logging.info(
+            msg=f' New entry added to monitoring table {Kpi.MONITORING_TABLE.split(".")[-1] if "." in Kpi.MONITORING_TABLE else Kpi.MONITORING_TABLE} table')
+        logging.info(msg=f' Monitoring table updated with new status: {status}')
         return result

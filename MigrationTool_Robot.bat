@@ -15,8 +15,9 @@ IF "%MIG_TYPE%"=="1" GOTO MigType1
 IF "%MIG_TYPE%"=="2" GOTO MigType2
 IF "%MIG_TYPE%"=="3" GOTO MigType3
 IF "%MIG_TYPE%"=="4" GOTO MigType4
-IF "%MIG_TYPE%"=="7" GOTO MigType7
+IF "%MIG_TYPE%"=="5" GOTO MigType5
 IF "%MIG_TYPE%"=="6" GOTO MigType6
+IF "%MIG_TYPE%"=="7" GOTO MigType7
 
 ECHO Type Migration "!MIG_TYPE!" invalid.
 GOTO End
@@ -43,6 +44,12 @@ GOTO TypeDone
 SET MIG_JOB=4_MIGRATE_MappingDossier_additional.kjb
 SET MIG_LOG=MigrationTool4.log
 SET MIG_DOSLOG=MigrationTool4.doslog
+GOTO TypeDone
+
+:MigType5
+SET MIG_JOB=5_MIGRATE_Medicalleave_dossiers.kjb
+SET MIG_LOG=MigrationTool5.log
+SET MIG_DOSLOG=MigrationTool5.doslog
 GOTO TypeDone
 
 :MigType6

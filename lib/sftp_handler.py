@@ -2,8 +2,9 @@
 
 import config as cfg
 import logging
-from lib.lastpass_handler import get_lp_creds
 import pysftp
+from lib.credentials_handler import get_credentials
+from retry import retry
 
 
 class SftpHandle(object):
@@ -14,12 +15,37 @@ class SftpHandle(object):
 
     def __init__(self):
         # Collect SFTP credentials from secure password manager:
-        credentials = get_lp_creds(folder=cfg.LP_FOLDER, item=cfg.LP_SFTP_CREDS, user=cfg.LP_USER_ACC)
+        credentials = get_credentials(item=cfg.SFTP_CREDS)
         self.host = credentials.get('notes')
         self.user = credentials.get('username')
         self.pwd = credentials.get('password')
         self.cnopts = pysftp.CnOpts()
         self.cnopts.hostkeys = None
+        self.sftp = None
+
+        # Establish the SFTP connection
+        self.connect()
+
+    @retry(Exception, delay=20, tries=3)
+    def connect(self):
+        """Establish the SFTP connection."""
+        try:
+            self.sftp = pysftp.Connection(host=self.host, username=self.user, password=self.pwd, cnopts=self.cnopts)
+        except Exception as error:
+            logging.warning(msg=f" Connection to sftp failed due to error: {error}")
+
+    def disconnect(self):
+        """Close the SFTP connection."""
+        if self.sftp:
+            self.sftp.close()
+
+    def __enter__(self):
+        """For use in a with statement."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """For use in a with statement. Closes the connection when exiting the 'with' block."""
+        self.disconnect()
 
     def ls_dir(self, remote_path):
         """
@@ -27,12 +53,11 @@ class SftpHandle(object):
         :param remote_path: path to list on the server (path format like: /path/to/list)
         :return: list result
         """
-        with pysftp.Connection(host=self.host, username=self.user, password=self.pwd, cnopts=self.cnopts) as sftp:
-            if sftp.exists(remote_path):
-                return sftp.listdir(remote_path)
-            else:
-                logging.critical(msg=f'Remote path {remote_path} doesnt exist')
-                raise OSError(f' Remote path {remote_path} doesnt exist')
+        if self.sftp.exists(remote_path):
+            return self.sftp.listdir(remote_path)
+        else:
+            logging.critical(msg=f'Remote path {remote_path} doesnt exist')
+            raise AssertionError(f' Remote path {remote_path} doesnt exist')
 
     def mk_dir(self, remote_path, mode=777):
         """
@@ -41,12 +66,12 @@ class SftpHandle(object):
         :param mode: int mode: *Default: 777* - int representation of octal mode for directory
         :return:
         """
-        with pysftp.Connection(host=self.host, username=self.user, password=self.pwd, cnopts=self.cnopts) as sftp:
-            if not sftp.exists(remote_path):
-                sftp.makedirs(remotedir=remote_path, mode=mode)
-            else:
-                logging.error(f' Remote dir {remote_path} already exists')
-                raise OSError(f' Remote dir {remote_path} already exists')
+        if not self.sftp.exists(remote_path):
+            self.sftp.makedirs(remotedir=remote_path, mode=mode)
+            logging.info(msg=f" Folder {remote_path} created")
+        else:
+            logging.error(f' Remote dir {remote_path} already exists')
+            raise AssertionError(f' Remote dir {remote_path} already exists')
 
     def rm_dir(self, remote_path):
         """
@@ -54,12 +79,11 @@ class SftpHandle(object):
         :param str remote_path: the remote directory to remove (path format like: /path/to/dir)
         :returns: None
         """
-        with pysftp.Connection(host=self.host, username=self.user, password=self.pwd, cnopts=self.cnopts) as sftp:
-            if sftp.exists(remote_path):
-                sftp.rmdir(remotepath=remote_path)
-            else:
-                logging.critical(msg=f'Remote dir {remote_path} doesnt exist')
-                raise OSError(f' Remote path {remote_path} doesnt exist')
+        if self.sftp.exists(remote_path):
+            self.sftp.rmdir(remotepath=remote_path)
+        else:
+            logging.critical(msg=f'Remote dir {remote_path} doesnt exist')
+            raise AssertionError(f' Remote path {remote_path} doesnt exist')
 
     def rm_file(self, remote_path):
         """
@@ -67,12 +91,11 @@ class SftpHandle(object):
         :param remote_path: remote file path (path format like: /path/to/file)
         :return: None
         """
-        with pysftp.Connection(host=self.host, username=self.user, password=self.pwd, cnopts=self.cnopts) as sftp:
-            if sftp.exists(remotepath=remote_path):
-                sftp.remove(remotefile=remote_path)
-            else:
-                logging.critical(msg=f'Remote file {remote_path} doesnt exist')
-                raise OSError(f' Remote file {remote_path} doesnt exist')
+        if self.sftp.exists(remotepath=remote_path):
+            self.sftp.remove(remotefile=remote_path)
+        else:
+            logging.critical(msg=f'Remote file {remote_path} doesnt exist')
+            raise AssertionError(f' Remote file {remote_path} doesnt exist')
 
     def upload(self, local_path, remote_path):
         """
@@ -81,18 +104,17 @@ class SftpHandle(object):
         :param remote_path: remote path (path format like: /path/to/file)
         :return:
         """
-        with pysftp.Connection(host=self.host, username=self.user, password=self.pwd, cnopts=self.cnopts) as sftp:
-            if not sftp.exists(remote_path):
-                try:
-                    sftp.put(localpath=local_path, remotepath=remote_path)
-                except Exception as err:
-                    logging.critical(msg=f' Uploading failed with error: {err}')
-                    raise err
-                # verify if uploaded filepath exists:
-                if sftp.exists(remote_path):
-                    return True
-                else:
-                    return
+        if not self.sftp.exists(remote_path):
+            try:
+                self.sftp.put(localpath=local_path, remotepath=remote_path)
+            except Exception as err:
+                logging.critical(msg=f' Uploading failed with error: {err}')
+                raise err
+            # verify if uploaded filepath exists:
+            if self.sftp.exists(remote_path):
+                return True
             else:
-                logging.critical(msg=f' Remote file {remote_path} already exists')
-                raise OSError(f' Remote file {remote_path} already exists')
+                return
+        else:
+            logging.critical(msg=f' Remote file {remote_path} already exists')
+            raise AssertionError(f' Remote file {remote_path} already exists')

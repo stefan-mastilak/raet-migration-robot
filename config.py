@@ -17,13 +17,14 @@ MLM_LOGFILE = 'robot_log_mlm.log'
 DELIMITER = '#'*100
 
 # KPI:
-KPI_SECRET = 'kpi_secret.json'
 ID_CUSTOMER = 'NULL'
 ID_ROBOT = 'IPA-0019'
 ID_PROCESS = 'BNL-0003'
 ID_QUEUE = 0
+RUNTIME_HOSTNAME = 'NL-D-RAET00000'
 TABLE_TEST = 'prod-amkpi-cm.transaction_items_kpi.TEST_TRANSACTION_ITEMS'
 TABLE_PROD = 'prod-amkpi-cm.transaction_items_kpi.TRANSACTION_ITEMS'
+TABLE_MONITORING = 'prod-amkpi-cm.automate_monitoring.monitoring'
 SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 
 # ROBOT SLACK CHANNELS:
@@ -64,14 +65,11 @@ SEVEN_ZIP_PATH = 'C:\\Program Files\\7-Zip'
 # RESERVED DIRECTORIES:
 RESERVED_DIRS = ['Templates', 'Transformations', 'MappingFixedAllowances']
 
-# GCP CREDENTIALS FILE:
-GCP_SECRET_FILE = 'gcp_secret.json'
+# CREDENTIALS:
+CREDENTIALS = 'credentials.json'
 
-# LASTPASS:
-LP_MASTER_PWD_FILE = 'lp_pwd.txt'
-LP_FOLDER = 'PROD_VISMA_RAET'
-LP_USER_ACC = 'cipo.robot@visma.com'
-LP_SLACK_PROD_CREDS = 'Slack_prod_credentials'
-LP_SLACK_TEST_CREDS = 'Slack_test_credentials'
-LP_SFTP_CREDS = 'Visma_Raet_SFTP'
-LP_GCP_SECRET = 'GCP_SECRET'
+# CREDENTIAL ITEMS:
+SLACK_PROD_CREDS = 'Slack_prod_credentials'
+SLACK_TEST_CREDS = 'Slack_test_credentials'
+SFTP_CREDS = 'Visma_Raet_SFTP'
+GCP_SECRET = 'GCP_SECRET'

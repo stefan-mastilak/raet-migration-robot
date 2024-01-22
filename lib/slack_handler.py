@@ -9,14 +9,14 @@ class SlackLogger(object):
     Class for logging into the Slack channel.
     """
 
-    def __init__(self, lastpass_creds, channel):
+    def __init__(self, creds, channel):
         """
-        :param lastpass_creds: credentials for Slack API stored in LastPass password manager
+        :param creds: credentials for Slack API stored in LastPass password manager
         :param channel: slack channel where to post
         """
         self.channel = channel
-        self.webhook_url = lastpass_creds.get('url')  # webhook url is stored in the 'url' section in LastPass item
-        self.token = lastpass_creds.get('notes')  # token is stored in the 'notes' section in LastPass item
+        self.webhook_url = creds.get('url')  # webhook url is stored in the 'url' section in LastPass item
+        self.token = creds.get('notes')  # token is stored in the 'notes' section in LastPass item
         self.client = WebClient(token=self.token)
         self.webhook = WebhookClient(url=self.webhook_url)
 

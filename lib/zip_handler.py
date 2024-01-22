@@ -16,7 +16,7 @@ class Zipper(Migration):
     @staticmethod
     def __get_size(folder: str):
         """
-        Go trough folder path and return size of it's content (including it's sub-folders).
+        Go through folder path and return size of it's content (including it's sub-folders).
         :param folder: folder path
         :return: folder size
         :rtype: int

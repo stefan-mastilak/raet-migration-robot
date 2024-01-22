@@ -1,20 +1,19 @@
 # REF: stefan.mastilak@visma.com
 
-from mig.sdol_counters import SdolCounters
-from lib.base_migration import Migration
-from lib.base_checks import Checks
-from lib.base_actions import Actions
-from lib.zip_handler import Zipper
+import csv
 import config as cfg
 import glob
 import logging
 import os
 import shutil
-import time
 import zipfile
+from lib.base_migration import Migration
+from lib.base_checks import Checks
+from lib.base_actions import Actions
+from lib.zip_handler import Zipper
 
 
-class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
+class SdolMigration(Checks, Actions, Zipper, Migration):
     """
     SDOL migration class.
     """
@@ -32,7 +31,7 @@ class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
         """
         Unzip all the zip files found inside DOCS folder. It's needed because when we execute sfx files,
         we will get set of zip files inside DOCS folder, which needs to be extracted as well in order to be able
-        to manipulate with it's content.
+        to manipulate with its content.
         :return: True if all zip files unzipped successfully
         :rtype: bool
         """
@@ -116,9 +115,33 @@ class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
         """
         return len([i for i in glob.glob(os.path.join(self.docs_dir, '*')) if '.zip' not in i])
 
+    def __get_migrated_count(self):
+        """
+        Read Counters.csv file created by MigrationTool and get 'SDOL_Migrated_TotalFiles' number from it.
+        :return: total migrated files count
+        :rtype: int
+        """
+        counters_path = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, 'Counters.csv')
+
+        if os.path.isfile(counters_path):
+            counter = None
+            with open(counters_path, mode='r') as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=';')
+                for row in csv_reader:
+                    if len(row) == 2:
+                        if 'SDOL_Migrated_TotalFiles' in row:
+                            counter = int(row[1]) if row[1].isdecimal() else 0
+                            return counter
+            if not counter:
+                logging.critical(msg=f" No keyword like 'SDOL_Migrated_TotalFiles' found in Counters.csv file")
+                raise ValueError(f' Unable to fetch SDOL_Migrated_TotalFiles count from Counters.csv file')
+        else:
+            logging.critical(msg=f' Counters.csv file not found in {self.mig_type} folder')
+            raise FileNotFoundError(f' Counters.csv file not found in {self.mig_type} folder')
+
     def __checksum_index_vs_zip(self):
         """
-        Compare number of index files vs number of zip files inside DOCS.
+        Compare number of index files inside index folder with number of zip files inside DOCS folder.
         :return: comparison result
         :rtype: bool
         """
@@ -141,96 +164,45 @@ class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
             logging.critical(msg=f' Zero count of index files')
             raise ValueError(f' Zero count of index files')
 
-    def __checksum_counters_vs_cmd(self):
+    def __checksum_counters_vs_cmd(self, cmd_file):
         """
-        Compare count of '_Migrated' customer files from Counters.csv with number of 'move' rows from customer cmd file
+        Compare total migrated files count with number of 'move' rows from .cmd file
+        :param cmd_file: cmd file path
         :return: comparison result
         :rtype: bool
         """
-        counters_count = self.get_migrated_count()
-        cmd_count = self.get_cmd_rows_count()
-        error = False
+        counters_count = self.__get_migrated_count()
+        cmd_count = self.get_cmd_move_rows_count(cmd_file=cmd_file)
 
-        for uid, count in counters_count.items():
-            for _uid, _count in cmd_count.items():
-                if uid == _uid:
-                    if count == _count:
-                        logging.info(msg=f' Checksum for customer ID {uid} passed.'
-                                         f' Cmd count: {_count}, Counters count: {count}')
-                    else:
-                        logging.error(msg=f' Checksum for customer ID {uid} failed.'
-                                          f' Cmd count: {_count}, Counters count: {count}')
-                        error = True
-        if not error:
-            logging.info(msg=f' Checksum passed: All counters counts matches all cmd file rows counts')
+        if counters_count == cmd_count:
+            logging.info(msg=f' Checksum passed: Counters count: {counters_count}, Cmd move rows count: {cmd_count}')
             return True
         else:
-            logging.critical(msg=f" Checksum failed: Some counters counts doesn't match cmd file rows counts")
+            logging.critical(msg=f' Checksum failed: Counters count: {counters_count}, Cmd move rows count: {cmd_count}')
             return False
 
-    def __checksum_counters_vs_dossiers(self):
+    def __checksum_counters_vs_dossiers(self, cmd_file):
         """
-        Checksum counters vs dossiers count.
-        :return: comparison result (counters count vs dossiers count)
+        Checksum counters vs e-dossier files count.
+        NOTE:
+        1) One file with SQL query created in e-dossier folder
+        2) One file BulkInsert created in e-dossier folder
+        So we need to subtract -2  from total e-dossier files count to have a correct number for comparison
+        :param cmd_file: cmd file path
+        :return: comparison result (counters count vs e-dossier files count)
         :rtype: bool
         """
-        counters_count = self.get_migrated_count()
-        dossiers_count = self.get_dossiers_count()
-        error = False
+        counters_count = self.__get_migrated_count()
+        dossiers_count = self.get_dossiers_count(cmd_file=cmd_file)
 
-        for uid, count in counters_count.items():
-            for _uid, _count in dossiers_count.items():
-                if uid == _uid:
-                    if count == _count:
-                        logging.info(msg=f' Checksum for customer ID {uid} passed.'
-                                         f' Dossiers count: {_count}, Counters count: {count}')
-                    else:
-                        logging.error(msg=f' Checksum for customer ID {uid} failed.'
-                                          f' Dossiers count: {_count}, Counters count: {count}')
-                        error = True
-        if not error:
-            logging.info(msg=f' Checksum passed: All dossier files moved correctly')
+        if counters_count == (dossiers_count - 2):
+            logging.info(msg=f' Checksum passed: Counters count: {counters_count}, Dossiers count: {dossiers_count}')
+            logging.info(msg=f" NOTE: Considering 2 new extra files created in e-dossier folder (SQL and BulkInsert)")
             return True
         else:
-            logging.critical(msg=f' Checksum failed: Some dossier files not moved')
+            logging.critical(msg=f' Checksum failed: Counters count: {counters_count}, Dossiers count: {dossiers_count}')
+            logging.info(msg=f" NOTE: Considering 2 new extra files created in e-dossier folder (SQL and BulkInsert)")
             return False
-
-    def __rename_dossier_dirs(self):
-        """
-        Rename e-dossier migration folders according to '{CustomerID}_{CompanyID}_S' pattern.
-        :return: renamed mig folders full-paths
-        :rtype: list
-        """
-        mig_folders = self.get_mig_dirs_from_counters()
-        renamed = []
-
-        for dir_name in mig_folders:
-            mig_folder = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, dir_name)
-            new_name = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, f'{self.customer_dir}_{dir_name}_S')
-
-            if os.path.isdir(mig_folder):
-                retry = 5
-                while retry:
-                    time.sleep(0.5)
-                    try:
-                        os.rename(src=mig_folder, dst=new_name)
-                        renamed.append(new_name)
-                        retry = 0
-                    except Exception as err:
-                        if retry:
-                            retry = retry - 1
-                        else:
-                            logging.critical(
-                                msg=f' Renaming process failed for {mig_folder} >> {new_name}. Error: {err}')
-                            raise PermissionError(f' Renaming of {mig_folder} to {new_name} failed')
-            else:
-                raise NotADirectoryError(f" Directory {mig_folder} doesn't exist")
-
-        if len(mig_folders) == len(renamed):
-            return renamed
-        else:
-            logging.critical(msg=f' Renaming process failed - not all folders were renamed')
-            raise AssertionError(f' Renaming process failed - not all folders were renamed')
 
     def run_migration(self, sftp_prod: bool):
         """
@@ -263,7 +235,7 @@ class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
 
             # check if properties file exists in customer folder:
             if not self.props_check():
-                break
+                pass
 
             # check if parameters file exists in customer folder:
             if not self.params_check():
@@ -271,6 +243,10 @@ class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
 
             # check if SDOL folder exists in customer folder:
             if not self.mig_type_dir_check():
+                break
+
+            # check if SDOL_parameters.xlsx file exists in customer folder:
+            if not self.mig_params_xlsx_check():
                 break
 
             # read password for zipped files:
@@ -305,33 +281,33 @@ class SdolMigration(Checks, Actions, Zipper, SdolCounters, Migration):
             if not self.execute_migration_job():
                 break
 
-            # checksum counters vs cmd file rows:
-            if not self.__checksum_counters_vs_cmd():
+            # get cmd file (there should always be only one for SDOL):
+            cmd_file = self.get_cmd_file()
+
+            # checksum counters vs cmd file move rows:
+            if not self.__checksum_counters_vs_cmd(cmd_file=cmd_file):
                 break
 
-            # get .cmd files:
-            cmd_files = self.get_cmd_files()
-
-            # execute cmd files:
-            if not self.execute_cmd_files(cmd_files=cmd_files):
+            # execute cmd file:
+            if not self.execute_cmd_file(cmd_file=cmd_file):
                 break
 
-            # checksum counters vs dossier files:
-            if not self.__checksum_counters_vs_dossiers():
+            # checksum counters vs e-dossier files:
+            if not self.__checksum_counters_vs_dossiers(cmd_file=cmd_file):
                 break
 
-            # rename dossier directories:
-            renamed = self.__rename_dossier_dirs()
-            if not renamed:
+            # rename e-dossier folder:
+            renamed_dir = self.rename_dossier_folder(cmd_file=cmd_file)
+            if not renamed_dir:
                 break
 
-            # zip dossiers:
-            zipped = self.zip_dossiers(folders=renamed, pwd=self.password)
-            if not zipped:
+            # zip folder containing all e-dossiers:
+            zipped_folder = self.zip_single_dossier(folder=renamed_dir, pwd=self.password)
+            if not zipped_folder:
                 break
 
-            # Upload to SFTP:
-            if not self.upload_dossiers(files=zipped, sftp_prod=sftp_prod):
+            # Upload zipped folder to SFTP:
+            if not self.upload_single_dossier(file=zipped_folder, sftp_prod=sftp_prod):
                 break
 
             # SDOL migration succeeded:

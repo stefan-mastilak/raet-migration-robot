@@ -1,13 +1,15 @@
 # REF: stefan.mastilak@visma.com
 
-from lib.base_migration import Migration
-from lib.sftp_handler import SftpHandle
 import config as cfg
 import glob
 import logging
 import os
+import pandas as pd
+import re
 import subprocess
 import time
+from lib.base_migration import Migration
+from lib.sftp_handler import SftpHandle
 
 
 class Actions(Migration):
@@ -141,7 +143,7 @@ class Actions(Migration):
             return True
 
     @staticmethod
-    def add_cmd_encoding(cmd_file):
+    def __add_cmd_encoding(cmd_file):
         """
         Add "chcp 65001" to the very top line of the cmd file.
         This will tell windows to use UTF8 encoding for cmd execution.
@@ -151,10 +153,10 @@ class Actions(Migration):
         :return: None
         """
         if os.path.isfile(cmd_file):
-            with open(cmd_file, 'r') as contents:
+            with open(cmd_file, 'r', encoding='utf-8') as contents:
                 save = contents.read()
 
-            with open(cmd_file, 'w') as contents:
+            with open(cmd_file, 'w', encoding='utf-8') as contents:
                 # att UTF8 encoding at the top of cmd file:
                 contents.write('chcp 65001\n')
                 contents.write(save)
@@ -167,115 +169,200 @@ class Actions(Migration):
             logging.critical(msg=f' Cmd file not found in {cmd_file} path')
             raise FileNotFoundError(f' Cmd file not found in {cmd_file} path')
 
-    def get_cmd_files(self):
+    def get_cmd_file(self):
         """
-        Get all cmd files inside customer folder and its sub-folders.
-        :return: cmd file paths
-        :rtype: list
+        Get cmd file from customer folder.
+        There should always be only one cmd file for PDOL, SDOL and MLM migration
+        :return: cmd file path
+        :rtype: str
         """
         cmd_files = glob.glob(os.path.join(cfg.MIG_ROOT, self.customer_dir, '**/*.cmd'), recursive=True)
         if cmd_files:
-            return cmd_files
-        else:
-            logging.critical(msg=f' No cmd files found in {self.customer_dir} folder')
-            raise FileNotFoundError(f' No cmd files found in {self.customer_dir} folder')
-
-    def execute_cmd_files(self, cmd_files: list):
-        """
-        Execute all cmd files inside customer folder.
-        :param cmd_files: list of customer cmd files to be executed
-        :return: True if all cmd files executed successfully
-        :rtype: bool
-        """
-        executed = 0
-        for cmd_file in cmd_files:
-            # check if cmd file path exists:
-            if os.path.isfile(cmd_file):
-                # split path:
-                root_path, file_name = os.path.split(cmd_file)
-                # add encoding (UTF8):
-                self.add_cmd_encoding(cmd_file=cmd_file)
-
-                # Execute cmd file:
-                logging.info(msg=f' Executing cmd file {file_name}')
-                process = subprocess.Popen(cmd_file,
-                                           stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE,
-                                           encoding='utf-8')
-                stdout, stderr = process.communicate()
-
-                if stderr:
-                    # Report errors count:
-                    error_list = stderr.split("\n")
-                    for line in error_list:
-                        if line == "":
-                            error_list.remove(line)
-                    logging.critical(msg=f' Cmd file {file_name} execution failed')
-                    logging.critical(msg=f' Errors in total: {len(error_list)}')
-
-                    # Report 'File not found errors' count:
-                    nf_counter = 0
-                    for line in error_list:
-                        if 'cannot find the file' in line:
-                            nf_counter += 1
-                    if nf_counter:
-                        logging.critical(msg=f' Cannot find the file errors: {nf_counter}')
-
-                    return
+            if len(cmd_files) == 1:
+                # there should always be only one cmd file for PDOL, SDOL and MLM migration
+                cmd_path = os.path.normpath(cmd_files[0])
+                if os.path.isfile(cmd_path):
+                    return cmd_path
                 else:
-                    logging.info(msg=f' Cmd file {file_name} executed successfully')
-                    executed += 1
-                    continue
+                    logging.critical(msg=f" No cmd file found in path {cmd_path}")
+                    raise FileNotFoundError(f" No cmd file found in path {cmd_path}")
             else:
-                logging.critical(msg=f' Cmd file not found in {cmd_file} path')
-                raise FileNotFoundError(f' Cmd file not found in {cmd_file} path')
-
-        if executed == len(cmd_files):
-            logging.info(msg=f' Checksum passed: All cmd files executed successfully')
-            return True
+                logging.critical(f" More than one cmd file found in {self.customer_dir}")
+                raise AssertionError(f" More than one cmd file found in {self.customer_dir}")
         else:
-            logging.critical(msg=f' Checksum failed: Cmd files execution failed')
-            return False
+            logging.critical(msg=f' No cmd file found in {self.customer_dir} folder')
+            raise FileNotFoundError(f' No cmd file found in {self.customer_dir} folder')
 
-    def upload_dossiers(self, files: list, sftp_prod=True):
+    @staticmethod
+    def get_cmd_move_rows_count(cmd_file):
         """
-        Upload dossier files to SFTP server.
-        :param files: files to be uploaded to SFTP server
-        :param sftp_prod: True by default, set to False if you want to upload to Test folder during testing phase
-        :return: True if all files uploaded
+        Read cmd file and get its 'move' rows count.
+        :return: cmd file rows count
+        :rtype: int
+        """
+        count = 0
+
+        if os.path.isfile(cmd_file):
+            with open(cmd_file, encoding='utf-8') as cmd_file:
+                rows = cmd_file.readlines()
+                if len(rows) > 0:
+                    for row in rows:
+                        if 'move' in row:
+                            count += 1
+                else:
+                    logging.critical(msg=f' Zero rows count in cmd file')
+                    raise ValueError(f' Zero rows count in cmd file')
+            if count:
+                return count
+            else:
+                logging.critical(msg=f' Zero move rows count in cmd file')
+                raise ValueError(f' Zero move rows count in cmd file')
+        else:
+            logging.critical(msg=f' Cmd file not found in {cmd_file} path')
+            raise FileNotFoundError(f' Cmd file not found in {cmd_file} path')
+
+    def execute_cmd_file(self, cmd_file):
+        """
+        Execute cmd file inside customer folder.
+        :param cmd_file: cmd file to be executed
+        :return: True if cmd file was executed without errors
         :rtype: bool
         """
-        logging.info(msg=f' Starting the uploading process')
-        sftp_folder = cfg.SFTP_DIR if sftp_prod else cfg.SFTP_TEST_DIR
+        missing_files_count = 0
+        root_path, file_name = os.path.split(cmd_file)
+        self.__add_cmd_encoding(cmd_file=cmd_file)
 
-        sftp = SftpHandle()
-        sftp.mk_dir(remote_path=f'{sftp_folder}/{self.customer_dir}')
-        logging.info(msg=f' Customer folder {self.customer_dir} created inside {sftp_folder} folder')
-        uploaded = 0
+        logging.info(msg=f' Executing cmd file {file_name}..')
+        process = subprocess.Popen(cmd_file,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT,
+                                   encoding='utf-8')
+        stdout, stderr = process.communicate()
 
-        for file_path in files:
-            # split path:
-            root_path, file_name = os.path.split(file_path)
-            # upload file to sftp:
-            logging.info(msg=f' Uploading file {file_name}...')
-            sftp.upload(local_path=file_path, remote_path=f'{sftp_folder}/{self.customer_dir}/{file_name}')
+        out = [line for line in stdout.split("\n") if line != '']
+        nf_errs = [out[idx - 1] + f' {out[idx]}' for idx, i in enumerate(out) if 'cannot find the file' in i]
 
-            # check if file uploaded:
-            sftp_content = sftp.ls_dir(remote_path=f'/{sftp_folder}/{self.customer_dir}/')
-            if file_name in sftp_content:
-                logging.info(msg=f' File {file_name} successfully uploaded to {sftp_folder}/{self.customer_dir}')
-                uploaded += 1
-            else:
-                logging.critical(msg=f' Uploading failed for {file_name} Error: No such file found')
-                break
+        # If MLM - Check missing files error:
+        if self.mig_type == 'MLM':
+            if nf_errs:
+                logging.critical(msg=f' Cmd file {file_name} execution failed due to missing files')
+                logging.critical(msg=f' Missing files count: {len(nf_errs)}')
+                missing_files_count += int(len(nf_errs))
 
-        if uploaded == len(files):
-            logging.info(msg=f' Checksum passed: All files successfully uploaded to the SFTP server')
-            logging.info(msg=f' Uploading process finished')
-            return True
+                if 0 < missing_files_count <= 10:
+                    for err in nf_errs:
+                        missing_file = err.split('"')[1]
+                        if missing_file:
+                            logging.warning(msg=f' Missing file: {missing_file}')
+
+                    logging.info(msg=f' NOTE: Acceptable data loss ({missing_files_count} files) for MLM migration')
+                    logging.info(msg=f' Cmd file {file_name} execution considered as successful')
+                    return True  # MLM migration accepts maximum of 10 missing files
+                else:
+                    return False  # More than 10 missing files is considered as failure for MLM
+
+        if stderr:
+            logging.critical(msg=f' Cmd file {file_name} execution failed')
+            return False
         else:
-            logging.critical(msg=f" Checksum failed: Uploading process failed")
-            raise AssertionError(f" Checksum failed: Uploading process failed")
+            logging.info(msg=f' Cmd file {file_name} executed successfully')
+            return True
+
+    def __find_target_path_in_cmd_file(self, cmd_file):
+        """
+        Alternative way of finding migration target folder in the case there is no "TargetPath" in
+        PDOL_parameters.xlsx file. There should be migration target path in the cmd file at the beginning like:
+        1) FOR PDOL: if not exist <target_path> mkdir <target_path>
+        2) FOR SDOL: md <target_path> 2>nul
+        3) FOR MLM: if not exist <target_path/Elektronisch Dossier/file> mkdir <target_path/Elektronisch Dossier/file>
+        :param cmd_file: cmd file path
+        :return: target path as string
+        :rtype: str
+        """
+        with open(cmd_file, encoding='utf-8') as cmd_file:
+            if self.mig_type == 'PDOL':
+                for row in cmd_file.readlines():
+                    if 'if not exist' in row and 'mkdir' in row:
+                        path = row.split('mkdir')[1]
+                        return os.path.normpath(path) if path else None
+            if self.mig_type == 'SDOL':
+                for row in cmd_file.readlines():
+                    if 'md' in row:
+                        path = re.findall(r'"(.*?)"', row)
+                        return os.path.normpath(path[0]) if path else None
+            if self.mig_type == 'MLM':
+                for row in cmd_file.readlines():
+                    if "if not exist" in row and 'mkdir' in row:
+                        target_path = re.search(r"(.*?Elektronisch Dossier)",
+                                                os.path.normpath(row.split('"')[-2])).group(1)
+                        if target_path:
+                            return os.path.normpath(target_path)
+                        else:
+                            return
+
+    def get_target_folder(self, cmd_file):
+        """
+        Get Migration target folder path (There should be only one such folder according to the new rules).
+        :param cmd_file: cmd file path
+        :return: migration target folder full path
+        :rtype: str
+        """
+        mig_target = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, f'{self.mig_type}_parameters.xlsx')
+        target_path = None
+
+        if os.path.exists(mig_target):
+            # try to find target path in parameters file:
+            data = pd.read_excel(mig_target).to_dict()
+            for key in data.keys():
+                if not target_path:
+                    if 'target' in key.lower():  # there should be a TargetPath column in parameters excel file
+                        for item in data.get(key).values():
+                            if 'migvisma' in item.lower():  # MigVisma should be in the path for e-dossier target folder
+                                target_path = item
+            if target_path:
+                logging.info(msg=f" Target path fetched from {self.mig_type}_parameters.xlsx file")
+                logging.info(msg=f" Target folder: {target_path}")
+                return os.path.normpath(target_path)
+            else:
+                logging.warning(msg=f" No target path found in {self.mig_type}_parameters.xlsx file")
+        else:
+            logging.warning(msg=f" File {self.mig_type}_parameters.xlsx doesn't exist in {self.mig_type} folder")
+
+        if not target_path:
+            # try to find target path in cmd file:
+            logging.info(msg=f" Finding target path in cmd file..")
+            target_path = self.__find_target_path_in_cmd_file(cmd_file=cmd_file)
+            if target_path:
+                logging.info(msg=f" Target path fetched from cmd file")
+                logging.info(msg=f" Target folder: {target_path}")
+                return os.path.normpath(target_path)
+            else:
+                raise AssertionError(f" Unable to find target path in {self.mig_type}_parameters.xlsx or cmd file")
+
+    def get_dossiers_count(self, cmd_file):
+        """
+        Get count of all e-dossier files inside E-dossier target folder (there should be only one such folder)
+        :param cmd_file: cmd file path
+        :return: total count of all e-dossier files inside PDOL folder
+        :rtype: int
+        """
+        target_path = self.get_target_folder(cmd_file=cmd_file)
+
+        total_count = 0
+
+        if os.path.isdir(target_path):
+            for root, dirs, files in os.walk(target_path):
+                for _ in files:
+                    total_count += 1
+        else:
+            logging.critical(msg=f" Migration target folder doesn't exist")
+            raise NotADirectoryError(f" Path {target_path} doesn't exist")
+
+        if total_count:
+            return total_count
+        else:
+            logging.critical(msg=f' No e-dossier files found')
+            raise FileNotFoundError(f' No e-dossier files found')
 
     def upload_single_dossier(self, file: str, sftp_prod=True):
         """
@@ -288,26 +375,62 @@ class Actions(Migration):
         logging.info(msg=f' Starting the uploading process')
         sftp_folder = cfg.SFTP_DIR if sftp_prod else cfg.SFTP_TEST_DIR
 
-        sftp = SftpHandle()
-        sftp.mk_dir(remote_path=f'{sftp_folder}/{self.customer_dir}')
-        logging.info(msg=f' Customer folder {self.customer_dir} created inside {sftp_folder} folder')
+        with SftpHandle() as sftp:
+            # create remote directory to upload file to:
+            sftp.mk_dir(remote_path=f'{sftp_folder}/{self.customer_dir}')
 
-        # split path:
-        root_path, file_name = os.path.split(file)
-        # upload file to sftp:
-        logging.info(msg=f' Uploading file {file_name}...')
-        sftp.upload(local_path=file, remote_path=f'{sftp_folder}/{self.customer_dir}/{file_name}')
+            # split path:
+            root_path, file_name = os.path.split(file)
 
-        # check if file uploaded:
-        sftp_content = sftp.ls_dir(remote_path=f'/{sftp_folder}/{self.customer_dir}/')
-        if file_name in sftp_content:
-            logging.info(msg=f' File {file_name} successfully uploaded to sftp folder {sftp_folder}/{self.customer_dir}')
+            # upload file to sftp:
+            logging.info(msg=f' Uploading file {file_name}...')
+            sftp.upload(local_path=file, remote_path=f'{sftp_folder}/{self.customer_dir}/{file_name}')
+
+            # check if file uploaded:
+            sftp_content = sftp.ls_dir(remote_path=f'/{sftp_folder}/{self.customer_dir}/')
+            if file_name in sftp_content:
+                logging.info(msg=f' File {file_name} uploaded to sftp folder {sftp_folder}/{self.customer_dir}')
+            else:
+                logging.critical(msg=f' Uploading process failed for {file_name} file')
+                raise FileNotFoundError(f' Uploading process failed for {file_name} file')
+
+            logging.info(msg=f' Uploading process finished')
+            return True
+
+    def rename_dossier_folder(self, cmd_file):
+        """
+        Rename e-dossier migration target folder according to:
+         1) '{CustomerID}_P' pattern for PDOL ('P' stands for PDOL).
+         2) '{CustomerID}_S' pattern for SDOL ('S' stands for SDOL).
+         3) '{CustomerID}_P' pattern for MLM ('M' stands for MLM).
+         Postfix letter is basically first letter of migration type.
+        :param cmd_file: cmd file path
+        :return: renamed folder path (there should be only one e-dossier folder)
+        :rtype: str
+        """
+        original_name = self.get_target_folder(cmd_file=cmd_file)
+        original_root_path, _ = os.path.split(original_name)
+        new_name = os.path.join(original_root_path, f'{self.customer_dir}_{self.mig_type[0]}')
+
+        if os.path.isdir(original_name):
+            retry = 5
+            while retry:
+                time.sleep(0.5)
+                try:
+                    os.rename(src=original_name, dst=new_name)
+                    retry = 0
+                    logging.info(msg=f" Dossier folder {original_name} renamed to {new_name}")
+                    return new_name
+                except Exception as err:
+                    if retry:
+                        retry = retry - 1
+                    else:
+                        logging.critical(
+                            msg=f' Renaming process failed for {original_name} >> {new_name}. Error: {err}')
+                        raise PermissionError(f' Renaming of {original_name} to {new_name} failed')
         else:
-            logging.critical(msg=f' Uploading process failed for {file_name} file')
-            raise FileNotFoundError(f' Uploading process failed for {file_name} file')
-
-        logging.info(msg=f' Uploading process finished')
-        return True
+            logging.critical(msg=f" Directory {original_name} doesn't exist")
+            raise NotADirectoryError(f" Directory {original_name} doesn't exist")
 
     def rename_if_success_migration(self):
         """

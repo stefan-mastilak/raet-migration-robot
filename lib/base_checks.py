@@ -21,7 +21,7 @@ class Checks(Migration):
             return True
         else:
             logging.fatal(msg=f" Pentaho path doesn't exist in {cfg.PENTAHO_DIR}")
-            raise NotADirectoryError(f" Pentaho path doesn't exist in {cfg.PENTAHO_DIR}")
+            return False
 
     @staticmethod
     def kitchen_check():
@@ -35,7 +35,7 @@ class Checks(Migration):
             return True
         else:
             logging.critical(msg=f' Kitchen.bat script doesnt exist in {kitchen_path}')
-            raise FileNotFoundError(f' File doesnt exist: {kitchen_path}')
+            return False
 
     @staticmethod
     def mig_root_check():
@@ -48,7 +48,7 @@ class Checks(Migration):
             return True
         else:
             logging.error(msg=f' MigVisma path {cfg.PENTAHO_DIR} doesnt exist')
-            raise NotADirectoryError(f' Path doesnt exist: {cfg.PENTAHO_DIR}')
+            return False
 
     def customer_dir_check(self):
         """
@@ -61,7 +61,7 @@ class Checks(Migration):
             return True
         else:
             logging.critical(msg=f' Customer directory doesnt exist in {customer_folder}')
-            raise NotADirectoryError(f' Path doesnt exist: {customer_folder}')
+            return False
 
     def mig_type_dir_check(self):
         """
@@ -85,7 +85,7 @@ class Checks(Migration):
             return True
         else:
             logging.critical(msg=f' Customer folder {self.customer_dir} is in the reserved list')
-            raise NameError(f' Customer folder {self.customer_dir} is in the reserved list')
+            return False
 
     def props_check(self):
         """
@@ -98,8 +98,9 @@ class Checks(Migration):
         if os.path.isfile(props_path):
             return True
         else:
-            logging.critical(msg=f" File config.properties doesn't exist in {self.customer_dir} folder")
-            raise FileNotFoundError(f" File config.properties doesn't exist: {self.customer_dir} folder")
+            logging.warning(msg=f" File config.properties doesn't exist in {self.customer_dir} folder")
+            logging.info(msg=f" This is not mandatory check for PDOL and SDOL anymore based on the new requirements")
+            return False
 
     def params_check(self):
         """
@@ -114,4 +115,21 @@ class Checks(Migration):
             return True
         else:
             logging.critical(msg=f" File MigVisma_parameters.xlsx doesn't exist in {self.customer_dir} folder")
-            raise FileNotFoundError(f" File MigVisma_parameters.xlsx doesn't exists in {self.customer_dir} folder")
+            return False
+
+    def mig_params_xlsx_check(self):
+        """
+        Check if:
+        1) PDOL_parameters.xlsx
+        2) SDOL_parameters.xlsx
+        3) MLM_parameters.xlsx
+        file exists in customer folder - depends on the migration type
+        :return:
+        """
+        mig_params_path = os.path.join(cfg.MIG_ROOT, self.customer_dir, self.mig_type, f'{self.mig_type}_parameters.xlsx')
+
+        if os.path.isfile(mig_params_path):
+            return True
+        else:
+            logging.critical(msg=f" File {self.mig_type}_parameters.xlsx doesn't exist in {self.customer_dir} folder")
+            return False
