@@ -3,7 +3,6 @@
 * Robot type: On-Prem solution
 * Customer: Visma Raet Netherlands
 * Trigerring: schedule based 
-
 <br></br>
 ### Visma Raet migration robot tasks:
 * PDOL migration (Payroll files)
