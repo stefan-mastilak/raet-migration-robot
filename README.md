@@ -32,7 +32,6 @@
 * requirements.txt --> Python requirements file
 <br></br>
 ### Robot runtime environment:
-* NL-D-RAET00000 (10.5.96.94) - raet.local domain
 * Windows server 
   * logon via https://remote.raet.nl
 * Installed components:
