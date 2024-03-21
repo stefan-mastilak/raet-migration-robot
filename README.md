@@ -33,7 +33,7 @@
 <br></br>
 ### Robot runtime environment:
 * Windows server 
-  * logon via https://remote.raet.nl
+  * logon via vpn
 * Installed components:
   * Python 
     * version: 3.8.10 
