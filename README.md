@@ -57,8 +57,7 @@
  * Migration tool script:
     * D:\MigVisma\MigrationToolRobot.bat 
 <br></br>
-### Service proposal: 
-* https://confluence.visma.com/pages/viewpage.action?spaceKey=SI&title=Visma+RAET+service+proposal
+
 ### Reporting:
 * AutoMate KPI framework:
   *  GCP Project: prod-amkpi-cm
